@@ -1,9 +1,9 @@
 #!/bin/bash -l
-#SBATCH --nodes 1 --ntasks 16 --mem 48gb -J shovill --out logs/AAFTF_shovill.%a.log -p batch --time 96:00:00
+#SBATCH --nodes 1 --ntasks 24 -p short --mem 128gb -J shovill --out logs/AAFTF_shovill.%a.log
 
 # this load $SCRATCH variable
 module load workspace/scratch
-MEM=48
+MEM=128
 CPU=$SLURM_CPUS_ON_NODE
 if [ -z $CPU ]; then
  CPU=2
@@ -24,6 +24,7 @@ OUTDIR=input
 SAMPLEFILE=samples.csv
 ASM=asm/shovill
 MINLEN=500
+FASTQ=input
 WORKDIR=working_AAFTF
 mkdir -p $ASM
 IFS=, # set the delimiter to be ,
@@ -37,15 +38,41 @@ do
     PILON=$ASM/${STRAIN}.pilon.fasta
     SORTED=$ASM/${STRAIN}.sorted.fasta
     STATS=$ASM/${STRAIN}.sorted.stats.txt
-    STATS=$ASM/${STRAIN}.sorted.stats.txt
+    LEFTIN=$FASTQ/${BASE}_R1_001.fastq.gz
+    RIGHTIN=$FASTQ/${BASE}_R2_001.fastq.gz
+
+    if [ ! -f $LEFTIN ]; then
+	echo "no $LEFTIN file for $STRAIN/$BASE in $FASTQ dir"
+	exit
+    fi
+    LEFTTRIM=$WORKDIR/${BASE}_1P.fastq.gz
+    RIGHTTRIM=$WORKDIR/${BASE}_2P.fastq.gz
+    LEFTF=$WORKDIR/${BASE}_filtered_1.fastq.gz
+    RIGHTF=$WORKDIR/${BASE}_filtered_2.fastq.gz
     LEFT=$WORKDIR/${BASE}_fastp_1.fastq.gz
     RIGHT=$WORKDIR/${BASE}_fastp_2.fastq.gz
 
+    echo "$BASE $STRAIN"
+
     if [ ! -s $ASMFILE ]; then
 	if [ ! -f $LEFT ]; then
-	    echo "Cannot find LEFT $LEFT or RIGHT $RIGHT - did you run"
-	    echo "$INDIR/${BASE}_R1.fq.gz $INDIR/${BASE}_R2.fq.gz"
-	    exit
+	    module load AAFTF
+	    module load fastp
+	    if [ ! -f $LEFTF ]; then # can skip filtering if this exists means already processed
+		if [ ! -f $LEFTTRIM ]; then
+		    AAFTF trim --method bbduk --memory $MEM --left $LEFTIN --right $RIGHTIN -c $CPU -o $WORKDIR/${BASE}
+		fi
+		AAFTF filter -c $CPU --memory $MEM -o $WORKDIR/${BASE} --left $LEFTTRIM --right $RIGHTTRIM --aligner bbduk
+		if [ -f $LEFTF ]; then
+		    #rm $LEFTTRIM $RIGHTTRIM # remove intermediate file
+		    echo "found $LEFTF"
+		fi
+	    fi
+	    fastp --in1 $LEFTF --in2 $RIGHTF --out1 $LEFT --out2 $RIGHT -w $CPU --dedup \
+		  --dup_calc_accuracy 6 -y --detect_adapter_for_pe \
+		  -j $WORKDIR/${BASE}.json -h $WORKDIR/${BASE}.html
+	    module unload fastp
+	    module unload AAFTF
 	fi
 	module load shovill
 	time shovill --cpu $CPU --ram $MEM --outdir $WORKDIR/shovill_${STRAIN} \
