@@ -1,5 +1,5 @@
 #!/bin/bash -l
-#SBATCH -p batch -N 1 -n 16 --mem 256gb --out logs/AAFTF.%a.log
+#SBATCH -p batch -N 1 -n 24 --mem 256gb --out logs/AAFTF.%a.log
 
 MEM=256
 CPU=$SLURM_CPUS_ON_NODE
@@ -51,7 +51,6 @@ do
 
     echo "$BASE $STRAIN"
     if [ ! -f $ASMFILE ]; then # can skip we already have made an assembly
-
 	if [ ! -f $LEFT ]; then
 	    if [ ! -f $LEFTF ]; then # can skip filtering if this exists means already processed
 		if [ ! -f $LEFTTRIM ]; then
