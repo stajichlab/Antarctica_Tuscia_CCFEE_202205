@@ -1,6 +1,6 @@
 #!/usr/bin/bash -l
 
-#SBATCH --nodes 1 --ntasks 24 --mem 24G -p short -J readcount --out logs/bbcount.%a.log --time 2:00:00
+#SBATCH --nodes 1 --ntasks 24 --mem 24G -p batch -J readcount --out logs/bbcount.%a.log --time 48:00:00
 module load BBMap
 hostname
 MEM=24
@@ -19,30 +19,34 @@ INDIR=input
 SAMPLEFILE=samples.csv
 
 ASM=genomes
-OUTDIR=mapping_report
-BASE=$(sed -n ${N}p $SAMPLEFILE | cut -f3 -d,)
-FULL=$(sed -n ${N}p $SAMPLEFILE | cut -f7 -d,)
-SORTED=$(realpath $ASM/${FULL}.AAFTF.fasta)
-
-LEFT=$(ls $INDIR/${BASE}_R1_001.fastq.gz)
-LEFT=$(realpath $LEFT)
-RIGHT=$(ls $INDIR/${BASE}_R2_001.fastq.gz)
-RIGHT=$(realpath $RIGHT)
-echo "$LEFT $RIGHT"
+OUTDIR=$(realpath mapping_report)
+SAMPLES=samples.csv
 mkdir -p $OUTDIR
-if [ ! -s $OUTDIR/${FULL}.bbmap_covstats.txt ]; then
-	mkdir -p N$N.$$.bbmap
-	pushd N$N.$$.bbmap
-	bbmap.sh -Xmx${MEM}g ref=$SORTED in=$LEFT in2=$RIGHT covstats=../$OUTDIR/${FULL}.bbmap_covstats.txt  statsfile=../$OUTDIR/${FULL}.bbmap_summary.txt
-	popd
-	rm -rf N$N.$$.bbmap
-fi
-SORTED=$(realpath $ASM/${FULL}.shovill.fasta)
-BASE=${FULL}_shovill
-if [ ! -s $OUTDIR/${BASE}.bbmap_covstats.txt ]; then
-        mkdir -p N$N.$$.bbmap
-        pushd N$N.$$.bbmap
-        bbmap.sh -Xmx${MEM}g ref=$SORTED in=$LEFT in2=$RIGHT covstats=../$OUTDIR/${BASE}.bbmap_covstats.txt  statsfile=../$OUTDIR/${BASE}.bbmap_summary.txt
-        popd
-        rm -rf N$N.$$.bbmap
-fi
+
+IFS=, # set the delimiter to be ,
+tail -n +2 $SAMPLES | sed -n ${N}p | while read ID SAMPID BASE SAMPIDCC SPECIES PHYLUM STRAIN GEOLOC LAT LONG
+do
+    FULL=$STRAIN
+    echo "BASE is $BASE FULL is $FULL"
+    
+    
+    LEFT=$(realpath $INDIR/${BASE}_R1_001.fastq.gz)
+    RIGHT=$(realpath $INDIR/${BASE}_R2_001.fastq.gz)
+    
+    echo "$LEFT $RIGHT"
+
+    SORTED=$(realpath $ASM/${FULL}.AAFTF.fasta)
+    pushd $SCRATCH
+    if [ ! -s $OUTDIR/${FULL}.bbmap_covstats.txt ]; then
+	bbmap.sh -Xmx${MEM}g ref=$SORTED in=$LEFT in2=$RIGHT covstats=$OUTDIR/${FULL}.bbmap_covstats.txt  statsfile=$OUTDIR/${FULL}.bbmap_summary.txt
+    fi
+    # remove ref dir
+    rm -rf ref
+    popd
+    SORTED=$(realpath $ASM/${FULL}.shovill.fasta)
+    REPORTOUT=${FULL}_shovill
+    pushd $SCRATCH
+    if [ ! -s $OUTDIR/${REPORTOUT}.bbmap_covstats.txt ]; then
+        bbmap.sh -Xmx${MEM}g ref=$SORTED in=$LEFT in2=$RIGHT covstats=$OUTDIR/${REPORTOUT}.bbmap_covstats.txt  statsfile=$OUTDIR/${BASE}.bbmap_summary.txt
+    fi
+done
