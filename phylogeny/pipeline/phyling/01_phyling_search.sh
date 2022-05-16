@@ -14,5 +14,5 @@ fi
 # probably should check to see if allseq is newer than newest file in the folder?
 echo " I will remove prefix.tab to make sure it is regenerated"
 #rm prefix.tab
-./PHYling_unified/PHYling init
-./PHYling_unified/PHYling search -q slurm
+python3 ./PHYling_unified/PHYling init
+python3 ./PHYling_unified/PHYling search -q slurm
